@@ -2,22 +2,42 @@ provider "aws" {
     region  = "us-east-1"
 }
 
-resource "aws_vpc" "development-vpc" {
-    cidr_block = "10.0.0.0/16"
+
+resource "aws_vpc" "myapp-vpc" {
+    cidr_block = var.vpc_cidr_block
+    tags = {
+        Name: "${var.env_prefix}-vpc"
+    }
 }
 
-resource "aws_subnet" "dev-subnet-1" {
-    vpc_id = aws_vpc.development-vpc.id
-    cidr_block = "10.0.10.0/24"
-    availability_zone = "us-east-1a"
-}
+module "myapp-subnet" {
+    source = "./modules/subnet"
+    subnet_cidr_block = var.subnet_cidr_block
+    avail_zone = var.avail_zone
+    env_prefix = var.env_prefix
+    vpc_id = aws_vpc.myapp-vpc.id
 
-data "aws_vpc" "existing_vpc" {
-  default = true
 }
+#If I want to use the default route table 
+/*resource "aws_default_route_table" "main-rtb"{
+    aws_default_route_table_id = aws_vpc.myapp-vpc.aws_default_route_table_id # we can find this by reference the vpc object. terraform state show aws_vpc.myapp-vpc
+    route{
+        cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.myapp-igw.id
+    }
+    tags = {
+        Name: "${var.env_prefix}-rtb"
+    }
+}*/
 
-resource "aws_subnet" "dev-subnet-2" {
-    vpc_id = data.aws_vpc.existing_vpc.id
-    cidr_block = "172.31.96.0/20"
-    
+module "myapp-server" {
+    source = "./modules/webserver"
+    vpc_id = aws_vpc.myapp-vpc.id
+    my_ip = var.my_ip
+    env_prefix = var.env_prefix
+    image_name = var.image_name
+    instance_type = var.instance_type
+    subnet_id = module.myapp-subnet.subnet.id
+    avail_zone = var.avail_zone
+    public_key_location = var.public_key_location
 }
